@@ -38,7 +38,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from config import GOOGLE_API_KEY
 from fts5_retriever import SQLiteFTS5Retriever
-from langchain_huggingface import HuggingFaceEmbeddings
 
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 

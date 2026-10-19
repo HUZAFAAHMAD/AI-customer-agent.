@@ -605,9 +605,15 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
             stream_buffer = ""
 
     except Exception as stream_err:
-        err_msg = f"Connection interruption: {str(stream_err)}"
-        yield f"data: {json.dumps({'type': 'token', 'content': err_msg})}\n\n"
-        raw_chunks.append(err_msg)
+        print(f"Streaming error encountered: {stream_err}")
+        if not raw_chunks:
+            fallback_ans = "Our support AI experienced a momentary network delay. Please contact our support team at 1-800-TECHMART or 0800-83224, or try rephrasing your question."
+            yield f"data: {json.dumps({'type': 'token', 'content': fallback_ans})}\n\n"
+            raw_chunks.append(fallback_ans)
+        else:
+            notice = "\n\n(Response ended prematurely due to connection timeout.)"
+            yield f"data: {json.dumps({'type': 'token', 'content': notice})}\n\n"
+            raw_chunks.append(notice)
 
     generation_latency_ms = round((time.time() - t4) * 1000, 1)
     total_latency_ms = round((time.time() - total_start_time) * 1000, 1)

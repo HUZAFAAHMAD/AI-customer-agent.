@@ -50,8 +50,8 @@ RERANK_SCORE_THRESHOLD = 0.00005  # calibrated: allows typo/colloquial customer 
 
 # ── LLM instances ─────────────────────────────────────────────────
 DEFAULT_MODEL = os.getenv("GOOGLE_MODEL_NAME", "gemini-3.5-flash-lite")
-llm = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0, timeout=15, client_args={"http_options": {"timeout": 15000}})
-llm_generation = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0.2, timeout=15, client_args={"http_options": {"timeout": 15000}})
+llm = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0, timeout=10, max_retries=1, client_args={"http_options": {"timeout": 10000}})
+llm_generation = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0.2, timeout=15, max_retries=1, client_args={"http_options": {"timeout": 15000}})
 
 # ── Embeddings ────────────────────────────────────────────────────
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
@@ -404,6 +404,28 @@ def has_complex_syntax(query: str) -> bool:
     return False
 
 
+def needs_query_rewriting(query: str, history: list) -> bool:
+    """
+    Returns True ONLY if the query genuinely depends on prior conversation history.
+    If the customer asks a standalone question (e.g. 'What is techmart phone number?'),
+    skipping query rewriting saves 1500-3000ms and eliminates LLM timeout risks.
+    """
+    if not history:
+        return False
+    q = query.strip().lower()
+    if has_complex_syntax(q):
+        return True
+    pronoun_pattern = r'\b(it|its|that|this|these|those|they|them|their|the same|above|mentioned|earlier|previous|again|instead)\b'
+    if re.search(pronoun_pattern, q):
+        return True
+    if any(phrase in q for phrase in ["what about", "how about", "why is that", "tell me more", "and what", "and how"]):
+        return True
+    words = q.split()
+    if len(words) <= 3 and not any(w in q for w in ["phone", "email", "address", "contact", "hours", "return", "warranty", "refund", "price", "order"]):
+        return True
+    return False
+
+
 def run_parallel_analysis_and_retrieval(
     query: str, history: list, query_embedding: Optional[List[float]] = None
 ) -> Tuple[BatchAnalysis, List[Document], float, float]:
@@ -414,15 +436,15 @@ def run_parallel_analysis_and_retrieval(
     the redundant embedding call.
 
     Fast-path optimization:
-    If len(history) == 0 and query length is < 10 words, skip the LLM query rewrite step
+    If the query does not depend on history (e.g. standalone question), skip the LLM query rewrite step
     and send the raw query straight to retrieval. Only invoke Query Analysis if there is
-    prior conversation history or complex syntax.
+    genuine pronoun or conversational reference to prior turns.
     """
     word_count = len(query.strip().split())
-    has_history = bool(history and len(history) > 0)
     is_complex = has_complex_syntax(query)
+    needs_rewrite = needs_query_rewriting(query, history)
 
-    if not has_history and word_count < 10 and not is_complex:
+    if not needs_rewrite and word_count < 25 and not is_complex:
         t_analysis = 0.0
         analysis = BatchAnalysis(
             severity="low",
@@ -468,7 +490,16 @@ def run_parallel_analysis_and_retrieval(
     def _worker_analysis():
         nonlocal t_analysis
         st = time.time()
-        res = run_step1_batch_analysis(query, history)
+        try:
+            res = run_step1_batch_analysis(query, history)
+        except Exception as e:
+            print(f"Analysis worker error: {e}")
+            res = BatchAnalysis(
+                severity="low",
+                standalone_query=query,
+                complexity="simple",
+                expanded_queries=[query],
+            )
         t_analysis = round((time.time() - st) * 1000, 1)
         return res
 
@@ -511,8 +542,22 @@ def run_parallel_analysis_and_retrieval(
         analysis_future = executor.submit(_worker_analysis)
         speculative_future = executor.submit(_worker_retrieval)
 
-        analysis = analysis_future.result()
-        speculative_docs = speculative_future.result()
+        try:
+            analysis = analysis_future.result(timeout=4.0)
+        except Exception as e:
+            print(f"Analysis future timed out or failed ({e}); falling back to raw query")
+            analysis = BatchAnalysis(
+                severity="low",
+                standalone_query=query,
+                complexity="simple",
+                expanded_queries=[query],
+            )
+
+        try:
+            speculative_docs = speculative_future.result(timeout=8.0)
+        except Exception as e:
+            print(f"Retrieval future error ({e})")
+            speculative_docs = []
 
     # If query expansion generated distinct queries, retrieve extra candidates
     remaining_queries = [

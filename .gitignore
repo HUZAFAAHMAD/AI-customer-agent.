@@ -1,0 +1,9 @@
+.env
+db.sqlite3
+fts5_index.db
+chroma_kb/
+chroma_cache/
+flashrank_cache/
+__pycache__/
+node_modules/
+dist/

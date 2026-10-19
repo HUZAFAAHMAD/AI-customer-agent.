@@ -37,8 +37,8 @@ class AIRequest(models.Model):
 
 class AIModelConfig(models.Model):
     name = models.CharField(max_length=100, default="Active Configuration")
-    primary_model = models.CharField(max_length=100, default="gemini-3.5-flash")
-    backup_model = models.CharField(max_length=100, default="gemini-3.5-flash")
+    primary_model = models.CharField(max_length=100, default="gemini-3.5-flash-lite")
+    backup_model = models.CharField(max_length=100, default="gemini-3.5-flash-lite")
     embedding_model = models.CharField(max_length=100, default="sentence-transformers/all-MiniLM-L6-v2")
     temperature = models.FloatField(default=0.2)
     is_active = models.BooleanField(default=True)

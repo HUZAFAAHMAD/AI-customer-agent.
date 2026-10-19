@@ -285,24 +285,5 @@ def delete_document(source_name: str) -> bool:
 
 
 if __name__ == "__main__":
-
-    # ── add your PDFs here ────────────────────────────────────────
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(base_dir, "techmart_complete_guide.pdf"),
-        os.path.join(base_dir, "techmart_support_guide.pdf"),
-    ]
-    pdf_files = [p for p in candidates if os.path.exists(p)]
-
-    total = 0
-    for pdf in pdf_files:
-        total += add_pdf(pdf)
-
-    # ── or add plain text directly ────────────────────────────────
-    # add_text("""
-    # Your policy text here.
-    # Multiple paragraphs supported.
-    # """, source_name="return_policy")
-
     show_stats()
-    print(f"\nDone. Total chunks added this run: {total}")
+

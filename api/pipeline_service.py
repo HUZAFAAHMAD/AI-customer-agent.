@@ -27,7 +27,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
     
     # Check if custom model config exists
     config = AIModelConfig.objects.filter(is_active=True).first()
-    active_model_name = config.primary_model if config else "gemini-3.5-flash"
+    active_model_name = config.primary_model if config else "gemini-3.5-flash-lite"
     
     history = main.get_history(session_id)
     
@@ -241,7 +241,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
     except Exception as gen_err:
         # Fallback to secondary model if primary fails
         try:
-            backup_model_name = config.backup_model if config else "gemini-3.5-flash"
+            backup_model_name = config.backup_model if config else "gemini-3.5-flash-lite"
             status = "fallback"
             answer = main.run_step4_generation(query, top_docs, history)
         except Exception as backup_err:
@@ -329,7 +329,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
     """
     total_start_time = time.time()
     config = AIModelConfig.objects.filter(is_active=True).first()
-    active_model_name = config.primary_model if config else "gemini-3.5-flash"
+    active_model_name = config.primary_model if config else "gemini-3.5-flash-lite"
     history = main.get_history(session_id)
     # ── STEP 0: Cache Check (Fast Redis Exact Match + Chroma) ─────────────
     t_cache_0 = time.time()

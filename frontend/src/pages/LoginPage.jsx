@@ -5,8 +5,8 @@ import { API_BASE_URL } from "../apiConfig";
 
 // Phase 5 Topic 2: Login form in React — receiving and storing the token
 export default function LoginPage() {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -77,11 +77,6 @@ export default function LoginPage() {
             {loading ? "Verifying..." : "Sign In to Admin Panel"}
           </button>
         </form>
-
-        <div className="demo-credentials-note">
-          <p><strong>Demo Superuser Credentials:</strong></p>
-          <p>Username: <code>admin</code> | Password: <code>admin123</code></p>
-        </div>
       </div>
     </div>
   );

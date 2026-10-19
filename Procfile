@@ -1,1 +1,1 @@
-web: python manage.py migrate && gunicorn server.wsgi:application --bind 0.0.0.0:$PORT --timeout 120
+web: python manage.py migrate && gunicorn server.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120

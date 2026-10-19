@@ -5,7 +5,7 @@ class AIRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     input_text = models.TextField()
     output_text = models.TextField()
-    model_name = models.CharField(max_length=100, default="gemini-3.1-flash-lite")
+    model_name = models.CharField(max_length=100, default="gemini-3.5-flash")
     input_tokens = models.IntegerField(default=0)
     output_tokens = models.IntegerField(default=0)
     total_tokens = models.IntegerField(default=0)
@@ -37,8 +37,8 @@ class AIRequest(models.Model):
 
 class AIModelConfig(models.Model):
     name = models.CharField(max_length=100, default="Active Configuration")
-    primary_model = models.CharField(max_length=100, default="gemini-3.1-flash-lite")
-    backup_model = models.CharField(max_length=100, default="gemini-3.1-flash-lite")
+    primary_model = models.CharField(max_length=100, default="gemini-3.5-flash")
+    backup_model = models.CharField(max_length=100, default="gemini-3.5-flash")
     embedding_model = models.CharField(max_length=100, default="sentence-transformers/all-MiniLM-L6-v2")
     temperature = models.FloatField(default=0.2)
     is_active = models.BooleanField(default=True)

@@ -49,8 +49,9 @@ RERANK_MODEL = "ms-marco-TinyBERT-L-2-v2"
 RERANK_SCORE_THRESHOLD = 0.00005  # calibrated: allows typo/colloquial customer queries while gating out-of-domain noise
 
 # ── LLM instances ─────────────────────────────────────────────────
-llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", temperature=0)
-llm_generation = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", temperature=0.2)
+DEFAULT_MODEL = os.getenv("GOOGLE_MODEL_NAME", "gemini-3.5-flash")
+llm = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0)
+llm_generation = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0.2)
 
 # ── Embeddings ────────────────────────────────────────────────────
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")

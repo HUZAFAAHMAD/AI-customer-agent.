@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function AdminDocuments() {
   const [documents, setDocuments] = useState([]);
@@ -30,7 +31,7 @@ export default function AdminDocuments() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:8000/api/documents/");
+      const res = await fetch(`${API_BASE_URL}/api/documents/`);
       if (!res.ok) {
         const exactMsg = await extractErrorMessage(res, "Failed to load documents");
         throw new Error(exactMsg);
@@ -61,7 +62,7 @@ export default function AdminDocuments() {
     setMessage(null);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/documents/?source=${encodeURIComponent(sourceName)}`, {
+      const res = await fetch(`${API_BASE_URL}/api/documents/?source=${encodeURIComponent(sourceName)}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -95,7 +96,7 @@ export default function AdminDocuments() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/api/documents/", {
+      const res = await fetch(`${API_BASE_URL}/api/documents/`, {
         method: "POST",
         body: formData,
       });
@@ -125,7 +126,7 @@ export default function AdminDocuments() {
     setError(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/documents/", {
+      const res = await fetch(`${API_BASE_URL}/api/documents/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reindex_default: true }),
@@ -159,7 +160,7 @@ export default function AdminDocuments() {
     setError(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/documents/", {
+      const res = await fetch(`${API_BASE_URL}/api/documents/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

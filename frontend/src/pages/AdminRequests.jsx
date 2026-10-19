@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import RequestDetailModal from "../components/RequestDetailModal";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function AdminRequests() {
   const [requests, setRequests] = useState([]);
@@ -11,7 +12,7 @@ export default function AdminRequests() {
 
   function fetchRequests() {
     setLoading(true);
-    fetch("http://localhost:8000/api/requests/")
+    fetch(`${API_BASE_URL}/api/requests/`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load requests");
         return res.json();

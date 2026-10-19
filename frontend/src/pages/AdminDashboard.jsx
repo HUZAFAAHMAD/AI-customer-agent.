@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import RequestDetailModal from "../components/RequestDetailModal";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function AdminDashboard() {
   // Phase 1 Topic 3 & Phase 3 Topic 3: state for data, loading, error
@@ -15,9 +16,9 @@ export default function AdminDashboard() {
     setLoading(true);
     // Fetch stats, recent requests, and system health in parallel
     Promise.all([
-      fetch("http://localhost:8000/api/stats/").then((r) => r.json()),
-      fetch("http://localhost:8000/api/requests/").then((r) => r.json()),
-      fetch("http://localhost:8000/api/system/").then((r) => r.json()),
+      fetch(`${API_BASE_URL}/api/stats/`).then((r) => r.json()),
+      fetch(`${API_BASE_URL}/api/requests/`).then((r) => r.json()),
+      fetch(`${API_BASE_URL}/api/system/`).then((r) => r.json()),
     ])
       .then(([statsData, reqsData, sysData]) => {
         setStats(statsData);
@@ -34,7 +35,7 @@ export default function AdminDashboard() {
   const handleReset = async () => {
     if (!window.confirm("WARNING: This will instantly delete ALL documents in the knowledge base, ALL request logs, chat history, and cache. Your app will be completely empty. Continue?")) return;
     try {
-      const res = await fetch("http://localhost:8000/api/system/reset/", { method: "POST" });
+      const res = await fetch(`${API_BASE_URL}/api/system/reset/`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
         alert("System Reset Complete! Database, Vector Stores, and Redis are empty.");

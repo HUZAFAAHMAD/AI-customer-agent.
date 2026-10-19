@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { API_BASE_URL } from "../apiConfig";
 
 // Phase 5 Topic 2: Login form in React — receiving and storing the token
 export default function LoginPage() {
@@ -17,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    fetch("http://localhost:8000/api/token/", {
+    fetch(`${API_BASE_URL}/api/token/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),

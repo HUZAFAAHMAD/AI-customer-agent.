@@ -288,9 +288,12 @@ def delete_document(source_name: str) -> bool:
 if __name__ == "__main__":
 
     # ── add your PDFs here ────────────────────────────────────────
-    pdf_files = [
-        r"C:\AI-Engineer\AI customer agent\techmart_support_guide.pdf",  # change to your actual path
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "techmart_complete_guide.pdf"),
+        os.path.join(base_dir, "techmart_support_guide.pdf"),
     ]
+    pdf_files = [p for p in candidates if os.path.exists(p)]
 
     total = 0
     for pdf in pdf_files:

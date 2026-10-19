@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function AIModels() {
   const [configId, setConfigId] = useState(null);
@@ -14,7 +15,7 @@ export default function AIModels() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/models/")
+    fetch(`${API_BASE_URL}/api/models/`)
       .then((res) => res.json())
       .then((data) => {
         if (data && data.length > 0) {
@@ -50,8 +51,8 @@ export default function AIModels() {
     };
 
     const url = configId
-      ? `http://localhost:8000/api/models/${configId}/`
-      : "http://localhost:8000/api/models/";
+      ? `${API_BASE_URL}/api/models/${configId}/`
+      : `${API_BASE_URL}/api/models/`;
     const method = configId ? "PATCH" : "POST";
 
     fetch(url, {

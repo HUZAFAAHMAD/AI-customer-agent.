@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function CustomerChat() {
   // Phase 1 Topic 3: useState for managing state
@@ -60,7 +61,7 @@ export default function CustomerChat() {
 
     try {
       // Connect to Server-Sent Events (SSE) streaming endpoint
-      const response = await fetch("http://localhost:8000/api/chat/stream/", {
+      const response = await fetch(`${API_BASE_URL}/api/chat/stream/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, session_id: sessionId }),
@@ -155,7 +156,7 @@ export default function CustomerChat() {
       setLoading(false);
     } catch (err) {
       // Fallback: standard POST request if streaming connection drops
-      fetch("http://localhost:8000/api/chat/", {
+      fetch(`${API_BASE_URL}/api/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, session_id: sessionId }),
@@ -194,7 +195,7 @@ export default function CustomerChat() {
 
   function handleResetChat() {
     // Clear history in Redis backend and generate fresh session ID
-    fetch("http://localhost:8000/api/chat/clear/", {
+    fetch(`${API_BASE_URL}/api/chat/clear/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),

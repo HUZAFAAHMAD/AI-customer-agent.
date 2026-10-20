@@ -1,7 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "startCommand": "python manage.py migrate && gunicorn --config gunicorn.conf.py server.wsgi:application",
+    "startCommand": "python manage.py migrate && python seed_kb.py && gunicorn --config gunicorn.conf.py server.wsgi:application",
     "restartPolicyType": "ON_FAILURE"
   }
 }

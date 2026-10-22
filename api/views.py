@@ -231,8 +231,11 @@ class SystemResetView(APIView):
             keys = r.keys('chat_history:*')
             if keys:
                 r.delete(*keys)
+            exact_keys = r.keys('exact_cache:*')
+            if exact_keys:
+                r.delete(*exact_keys)
             r.delete('severity_alert_queue')
-            results.append(f"Cleared Redis ({len(keys)} history keys + queue)")
+            results.append(f"Cleared Redis ({len(keys)} history keys, {len(exact_keys)} exact_cache keys + queue)")
         except Exception as e:
             results.append(f"Redis error: {e}")
 

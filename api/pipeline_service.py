@@ -122,6 +122,11 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
         analysis_latency_ms = round((time.time() - t_parallel) * 1000, 1)
         retrieval_latency_ms = 0.0
 
+    # Deterministic enterprise life-safety override
+    q_low = query.lower()
+    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency", "gdpr", "fraud", "unauthorized"]):
+        analysis.severity = "high"
+
     # High severity check & durable alert queuing
     if analysis.severity == "high":
         enqueue_alert(query, analysis.severity, session_id)
@@ -427,6 +432,11 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
         candidates = main.run_step2_hybrid_retrieval([query])
         analysis_latency_ms = round((time.time() - t_parallel) * 1000, 1)
         retrieval_latency_ms = 0.0
+
+    # Deterministic enterprise life-safety override
+    q_low = query.lower()
+    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency", "gdpr", "fraud", "unauthorized"]):
+        analysis.severity = "high"
 
     if analysis.severity == "high":
         enqueue_alert(query, analysis.severity, session_id)

@@ -242,17 +242,35 @@ def embed_query_once(query: str) -> Optional[List[float]]:
 def run_step0_cache_check(
     original_query: str, query_embedding: Optional[List[float]] = None
 ) -> dict:
+    POISON_KEYWORDS = [
+        "connection timeout",
+        "momentary network delay",
+        "prematurely",
+        "rate limit",
+        "quota",
+        "deadline_exceeded",
+        "deadline expired",
+        "timed out",
+    ]
+
     # ── Fast-path 1: Redis exact string match (<1 ms) ──────────────────────────
     try:
         exact_key = f"exact_cache:{original_query.strip().lower()}"
         cached_exact = redis_client.get(exact_key)
         if cached_exact:
-            return {
-                "cache_hit": True,
-                "answer": cached_exact,
-                "distance": 0.0,
-                "source": "exact_cache",
-            }
+            low_exact = cached_exact.lower()
+            if any(k in low_exact for k in POISON_KEYWORDS):
+                try:
+                    redis_client.delete(exact_key)
+                except Exception:
+                    pass
+            else:
+                return {
+                    "cache_hit": True,
+                    "answer": cached_exact,
+                    "distance": 0.0,
+                    "source": "exact_cache",
+                }
     except Exception as e:
         print(f"Redis exact cache lookup error: {e}")
 
@@ -267,7 +285,11 @@ def run_step0_cache_check(
             return {"cache_hit": False, "answer": None}
         document, distance = results[0]
         if distance <= CACHE_DISTANCE_THRESHOLD:
-            return {"cache_hit": True, "answer": document.metadata["response"], "distance": distance}
+            sem_ans = document.metadata.get("response", "")
+            low_sem = sem_ans.lower()
+            if any(k in low_sem for k in POISON_KEYWORDS):
+                return {"cache_hit": False, "answer": None}
+            return {"cache_hit": True, "answer": sem_ans, "distance": distance}
         return {"cache_hit": False, "answer": None, "distance": distance}
     except Exception as e:
         # Cache query error must NEVER crash customer chat
@@ -569,8 +591,10 @@ def run_parallel_analysis_and_retrieval(
             analysis = analysis_future.result(timeout=4.0)
         except Exception as e:
             print(f"Analysis future timed out or failed ({e}); falling back to raw query")
+            q_low = query.lower()
+            is_urgent = any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency", "gdpr", "fraud"])
             analysis = BatchAnalysis(
-                severity="low",
+                severity="high" if is_urgent else "low",
                 standalone_query=query,
                 complexity="simple",
                 expanded_queries=[query],
@@ -602,6 +626,21 @@ def run_parallel_analysis_and_retrieval(
                     break
     else:
         candidates = speculative_docs[:CANDIDATE_POOL_SIZE]
+
+    # Deterministic enterprise life-safety override
+    q_low = query.lower()
+    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency"]):
+        analysis.severity = "high"
+        try:
+            fts_retriever = SQLiteFTS5Retriever(db_path=FTS5_DB_PATH, k=3)
+            safety_chunks = fts_retriever.invoke("CRITICAL PRODUCT SAFETY PROTOCOL burning smell smoke sparks battery swelling emergency dispatch 1-800-TECHMART Extension 9")
+            for sc in safety_chunks:
+                if sc.page_content.strip() not in [c.page_content.strip() for c in candidates]:
+                    candidates.insert(0, sc)
+        except Exception:
+            pass
+    elif any(w in q_low for w in ["gdpr", "fraud", "unauthorized"]):
+        analysis.severity = "high"
 
     return analysis, candidates, t_analysis, t_retrieval
 

@@ -33,13 +33,22 @@ def send_severity_alert_email(
     Use only when the classified severity is 'high'. Blocking/synchronous —
     the caller (alert_queue.py's worker) is responsible for running this
     off the request path."""
-    if not (EMAIL_SENDER and EMAIL_PASSWORD and EMAIL_RECEIVER):
-        return "Email skipped: credentials missing in .env"
+    sender = os.getenv("EMAIL_SENDER")
+    password = os.getenv("EMAIL_PASSWORD")
+    receiver = os.getenv("EMAIL_RECEIVER")
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("SMTP_PORT", 587))
+
+    if not (sender and password and receiver):
+        return f"Email skipped: credentials missing in environment (sender={bool(sender)}, password={bool(password)}, receiver={bool(receiver)})"
+
+    # Remove any accidental spaces in Gmail App Password
+    password = password.strip().replace(" ", "")
 
     msg = EmailMessage()
     msg["Subject"] = f"[{severity.upper()} SEVERITY] Customer support issue"
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = EMAIL_RECEIVER
+    msg["From"] = sender
+    msg["To"] = receiver
     msg.set_content(
         f"A high-severity customer issue was detected.\n\n"
         f"Severity:   {severity}\n"
@@ -49,10 +58,16 @@ def send_severity_alert_email(
     )
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-            server.starttls()
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.send_message(msg)
-        return "Email sent"
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+                server.login(sender, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as server:
+                server.starttls()
+                server.login(sender, password)
+                server.send_message(msg)
+        return f"Email sent successfully to {receiver}"
     except Exception as e:
+        print(f"[email-alert] Failed to send email via {host}:{port}: {e}")
         return f"Email failed: {e}"

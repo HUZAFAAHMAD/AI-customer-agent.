@@ -2,8 +2,8 @@ import os
 
 # Gunicorn configuration file for production (Railway / Docker)
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
-workers = int(os.getenv("WEB_CONCURRENCY", 2))
-threads = int(os.getenv("GUNICORN_THREADS", 4))
+workers = int(os.getenv("WEB_CONCURRENCY", 1))
+threads = int(os.getenv("GUNICORN_THREADS", 6))
 worker_class = "gthread"
 timeout = 180
 graceful_timeout = 30

@@ -554,6 +554,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
     raw_chunks = []
     inside_scratchpad = False
     stream_buffer = ""
+    has_streaming_error = False
 
     try:
         for chunk in main.generation_chain.stream(
@@ -606,8 +607,16 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
 
     except Exception as stream_err:
         print(f"Streaming error encountered: {stream_err}")
-        if not raw_chunks:
-            fallback_ans = "Our support AI experienced a momentary network delay. Please contact our support team at 1-800-TECHMART or 0800-83224, or try rephrasing your question."
+        has_streaming_error = True
+        err_str = str(stream_err).lower()
+        is_quota = any(kw in err_str for kw in ["resourceexhausted", "quota", "429", "rate limit", "too many requests"])
+        
+        if is_quota:
+            fallback_ans = "Google Gemini API rate limit / quota exceeded (15 Requests/Min on Free Tier). Please wait 30–60 seconds before sending your next question, or update your API key in settings."
+            yield f"data: {json.dumps({'type': 'token', 'content': fallback_ans})}\n\n"
+            raw_chunks.append(fallback_ans)
+        elif not raw_chunks:
+            fallback_ans = "Our support AI experienced a momentary network delay. Please try rephrasing your question in a few moments."
             yield f"data: {json.dumps({'type': 'token', 'content': fallback_ans})}\n\n"
             raw_chunks.append(fallback_ans)
         else:
@@ -651,7 +660,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
         source="rag",
         retrieval_count=len(candidates),
         rerank_score=round(top_score, 4),
-        status="success",
+        status="error" if has_streaming_error else "success",
         embedding_latency_ms=embedding_latency_ms,
         cache_latency_ms=cache_latency_ms,
         analysis_latency_ms=analysis_latency_ms,
@@ -687,6 +696,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
     yield f"data: {json.dumps(done_event)}\n\n"
 
     # Post-stream: Non-blocking save to semantic cache and history (now that client received done!)
-    main.save_to_semantic_cache(query, answer, precomputed_embedding=query_embedding)
+    if not has_streaming_error:
+        main.save_to_semantic_cache(query, answer, precomputed_embedding=query_embedding)
     main.save_to_history(session_id, query, answer)
 

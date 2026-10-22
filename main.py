@@ -157,6 +157,25 @@ def save_to_history(session_id: str, query: str, answer: str) -> None:
 def save_to_semantic_cache(
     original_query: str, answer: str, precomputed_embedding: Optional[List[float]] = None
 ):
+    if not answer or not original_query or len(answer.strip()) < 15:
+        return
+
+    # GUARD: Never cache errors, network delay fallbacks, quota notices, or connection timeouts!
+    low_ans = answer.lower()
+    error_keywords = [
+        "momentary network delay",
+        "ended prematurely",
+        "rate limit",
+        "quota",
+        "deadline expired",
+        "deadline_exceeded",
+        "timed out",
+        "timeout",
+        "contact our support team at 1-800-techmart or 0800-83224",
+    ]
+    if any(k in low_ans for k in error_keywords):
+        return
+
     try:
         # 1. Update Redis exact cache immediately (<1 ms)
         exact_key = f"exact_cache:{original_query.strip().lower()}"
@@ -351,6 +370,8 @@ def run_step2_hybrid_retrieval(expanded_queries: List[str]) -> List[Document]:
             results_list = list(executor.map(retriever.invoke, expanded_queries))
     except Exception as e:
         print(f"Retrieval error: {e}")
+        if "hnsw" in str(e).lower() or "nothing found on disk" in str(e).lower():
+            kb_vectorstore = None
         return []
 
     # Fair round-robin interleaving: ensures that every expanded query (e.g. Query 1,
@@ -534,6 +555,8 @@ def run_parallel_analysis_and_retrieval(
                 res = retriever.invoke(query)
         except Exception as e:
             print(f"Speculative retrieval error: {e}")
+            if "hnsw" in str(e).lower() or "nothing found on disk" in str(e).lower():
+                kb_vectorstore = None
             res = []
         t_retrieval = round((time.time() - st) * 1000, 1)
         return res

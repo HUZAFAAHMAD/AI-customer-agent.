@@ -36,15 +36,20 @@ export default function AdminDashboard() {
     if (!window.confirm("Purge all Redis and Chroma caches? (Knowledge base documents will remain 100% intact).")) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/cache/clear/`, { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        alert("Cache Purged Successfully!\n" + (data.results || []).join("\n"));
-        loadDashboardData();
-      } else {
-        alert("Cache clear failed: " + JSON.stringify(data));
+      if (!res.ok) {
+        if (res.status === 404) {
+          alert("Notice: The backend update is pending deployment on Railway.\n\nPlease open your Railway Dashboard and click 'Redeploy' on your backend service to activate the new endpoints.");
+          return;
+        }
+        const errText = await res.text();
+        alert("Cache clear failed: " + errText);
+        return;
       }
+      const data = await res.json();
+      alert("Cache Purged Successfully!\n" + (data.results || []).join("\n"));
+      loadDashboardData();
     } catch (err) {
-      alert("Error calling cache clear API: " + err);
+      alert("Error calling cache clear API: " + err.message);
     }
   };
 
@@ -52,15 +57,16 @@ export default function AdminDashboard() {
     if (!window.confirm("WARNING: This will reset all request logs, chat history, and cache. Continue?")) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/system/reset/`, { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        alert("System Reset Complete! Database logs, Redis caches, and queues are empty.");
-        loadDashboardData();
-      } else {
-        alert("Reset failed: " + JSON.stringify(data));
+      if (!res.ok) {
+        const errText = await res.text();
+        alert("Reset failed: " + errText);
+        return;
       }
+      const data = await res.json();
+      alert("System Reset Complete! Database logs, Redis caches, and queues are empty.");
+      loadDashboardData();
     } catch (err) {
-      alert("Error calling reset API: " + err);
+      alert("Error calling reset API: " + err.message);
     }
   };
 

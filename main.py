@@ -154,26 +154,91 @@ def save_to_history(session_id: str, query: str, answer: str) -> None:
     pipe.execute()
 
 
+# ── Cache Poison Guard & Life-Safety Detection ─────────────────────
+POISON_KEYWORDS = [
+    "connection timeout",
+    "momentary network delay",
+    "prematurely",
+    "rate limit",
+    "quota",
+    "deadline_exceeded",
+    "deadline expired",
+    "timed out",
+    "1-800-techmart or 0800-83224",
+    "try rephrasing your question",
+    "ended prematurely",
+    "couldn't find sufficiently relevant",
+]
+
+
+def is_poisoned_response(ans: Optional[str]) -> bool:
+    if not ans or len(ans.strip()) < 15:
+        return True
+    low = ans.lower()
+    return any(k in low for k in POISON_KEYWORDS)
+
+
+EMERGENCY_KEYWORDS = [
+    "fire", "firing", "burn", "burning", "burnt",
+    "smoke", "smoking", "spark", "sparking", "sparks",
+    "shock", "shocking", "shocked", "electric", "electrical",
+    "swollen", "swelling", "bulg", "bulging", "bulge",
+    "explod", "explosion", "exploding",
+    "melt", "melting", "melted",
+    "leak", "leaking", "acid",
+    "flame", "flames",
+    "hazard", "emergency",
+    "gdpr", "fraud", "unauthorized",
+    "lawsuit", "attorney", "subpoena"
+]
+
+
+def is_emergency_query(text: Optional[str]) -> bool:
+    if not text:
+        return False
+    low = text.lower()
+    for kw in EMERGENCY_KEYWORDS:
+        if re.search(r'\b' + re.escape(kw), low):
+            return True
+    return False
+
+
+def clear_all_cache() -> dict:
+    results = []
+    # 1. Flush Redis completely
+    try:
+        redis_client.flushdb()
+        results.append("Flushed Redis (all exact cache keys, histories, and queues purged)")
+    except Exception as e:
+        results.append(f"Redis flush error: {e}")
+
+    # 2. Clear Chroma semantic cache without touching Knowledge Base
+    global cache_vectorstore
+    try:
+        vs = get_cache_vectorstore()
+        all_data = vs._collection.get()
+        ids = all_data.get("ids", [])
+        if ids:
+            vs._collection.delete(ids=ids)
+            results.append(f"Cleared Chroma semantic cache ({len(ids)} items removed)")
+        else:
+            results.append("Chroma semantic cache was already empty")
+    except Exception as e:
+        results.append(f"Chroma cache clear error: {e}")
+
+    cache_vectorstore = None
+    try:
+        get_cache_vectorstore()
+    except Exception:
+        pass
+
+    return {"status": "success", "results": results}
+
+
 def save_to_semantic_cache(
     original_query: str, answer: str, precomputed_embedding: Optional[List[float]] = None
 ):
-    if not answer or not original_query or len(answer.strip()) < 15:
-        return
-
-    # GUARD: Never cache errors, network delay fallbacks, quota notices, or connection timeouts!
-    low_ans = answer.lower()
-    error_keywords = [
-        "momentary network delay",
-        "ended prematurely",
-        "rate limit",
-        "quota",
-        "deadline expired",
-        "deadline_exceeded",
-        "timed out",
-        "timeout",
-        "contact our support team at 1-800-techmart or 0800-83224",
-    ]
-    if any(k in low_ans for k in error_keywords):
+    if not answer or not original_query or is_poisoned_response(answer):
         return
 
     try:
@@ -242,24 +307,12 @@ def embed_query_once(query: str) -> Optional[List[float]]:
 def run_step0_cache_check(
     original_query: str, query_embedding: Optional[List[float]] = None
 ) -> dict:
-    POISON_KEYWORDS = [
-        "connection timeout",
-        "momentary network delay",
-        "prematurely",
-        "rate limit",
-        "quota",
-        "deadline_exceeded",
-        "deadline expired",
-        "timed out",
-    ]
-
     # ── Fast-path 1: Redis exact string match (<1 ms) ──────────────────────────
     try:
         exact_key = f"exact_cache:{original_query.strip().lower()}"
         cached_exact = redis_client.get(exact_key)
         if cached_exact:
-            low_exact = cached_exact.lower()
-            if any(k in low_exact for k in POISON_KEYWORDS):
+            if is_poisoned_response(cached_exact):
                 try:
                     redis_client.delete(exact_key)
                 except Exception:
@@ -286,8 +339,14 @@ def run_step0_cache_check(
         document, distance = results[0]
         if distance <= CACHE_DISTANCE_THRESHOLD:
             sem_ans = document.metadata.get("response", "")
-            low_sem = sem_ans.lower()
-            if any(k in low_sem for k in POISON_KEYWORDS):
+            if is_poisoned_response(sem_ans):
+                try:
+                    # Attempt to prune poisoned document from collection
+                    doc_id = document.metadata.get("id")
+                    if doc_id:
+                        vs._collection.delete(ids=[doc_id])
+                except Exception:
+                    pass
                 return {"cache_hit": False, "answer": None}
             return {"cache_hit": True, "answer": sem_ans, "distance": distance}
         return {"cache_hit": False, "answer": None, "distance": distance}
@@ -438,11 +497,7 @@ def has_complex_syntax(query: str) -> bool:
     if any(indicator in q for indicator in complex_indicators):
         return True
     # Urgent safety / legal keywords requiring severity analysis
-    urgent_indicators = [
-        "burning", "smoke", "fire", "explode", "explosion", 
-        "shock", "hazard", "lawsuit", "sue", "attorney", "court"
-    ]
-    if any(indicator in q for indicator in urgent_indicators):
+    if is_emergency_query(q):
         return True
     return False
 
@@ -483,11 +538,13 @@ def run_parallel_analysis_and_retrieval(
     and send the raw query straight to retrieval. Only invoke Query Analysis if there is
     genuine pronoun or conversational reference to prior turns.
     """
+    is_urgent = is_emergency_query(query)
     word_count = len(query.strip().split())
     is_complex = has_complex_syntax(query)
     needs_rewrite = needs_query_rewriting(query, history)
 
-    if not needs_rewrite and word_count < 25 and not is_complex:
+    # Urgent life-safety queries must NEVER be given low severity or skipped!
+    if not is_urgent and not needs_rewrite and word_count < 25 and not is_complex:
         t_analysis = 0.0
         analysis = BatchAnalysis(
             severity="low",
@@ -628,8 +685,7 @@ def run_parallel_analysis_and_retrieval(
         candidates = speculative_docs[:CANDIDATE_POOL_SIZE]
 
     # Deterministic enterprise life-safety override
-    q_low = query.lower()
-    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency"]):
+    if is_emergency_query(query):
         analysis.severity = "high"
         try:
             fts_retriever = SQLiteFTS5Retriever(db_path=FTS5_DB_PATH, k=3)
@@ -639,28 +695,12 @@ def run_parallel_analysis_and_retrieval(
                     candidates.insert(0, sc)
         except Exception:
             pass
-    elif any(w in q_low for w in ["gdpr", "fraud", "unauthorized"]):
-        analysis.severity = "high"
 
     return analysis, candidates, t_analysis, t_retrieval
 
 
 # =================================================================
 # STEP 3 — Local cross-encoder reranking + relevance gate
-# CHANGED: replaces two things at once from the original pipeline:
-#   1. The LLM-based batch reranker (one structured-output call asking the
-#      model to rank every candidate) - now a local FlashRank cross-encoder
-#      call. No LLM tokens spent, and it scales fine to the larger
-#      CANDIDATE_POOL_SIZE.
-#   2. The old Step 4 "reject if raw embedding distance > 0.9" gate - that
-#      cutoff was brittle because raw cosine/L2 distance isn't calibrated
-#      the same way across embedding models or query phrasings, so a fixed
-#      number like 0.9 either rejects good answers or lets bad ones through
-#      depending on the query. FlashRank's score is a calibrated 0-1
-#      relevance confidence for the actual (query, chunk) pair, which is a
-#      much more meaningful thing to threshold on. Still tune
-#      RERANK_SCORE_THRESHOLD against your own data - "remove one brittle
-#      cutoff" doesn't mean "no cutoff will ever need tuning again".
 # =================================================================
 
 
@@ -676,14 +716,20 @@ def run_step3_rerank(
     ]
     ranked = reranker.rerank(RerankRequest(query=standalone_query, passages=passages))
 
-    #     top_results = [
-    #     {"id": 2, "score": 0.95},
-    #     {"id": 0, "score": 0.90}
-    # ]
     top_results = ranked[:top_k]
-    # r = {"id": 2, "score": 0.95} and candidte[r] = candidate[2]
     top_docs = [candidates[r["id"]] for r in top_results]
     top_score = float(ranked[0]["score"]) if ranked else 0.0
+
+    # Guarantee enterprise life-safety: if query is an emergency, ensure safety docs are included and top_score passes threshold
+    if is_emergency_query(standalone_query):
+        top_score = max(top_score, 0.999)
+        has_safety = any("1-800-TECHMART" in d.page_content or "extension 9" in d.page_content.lower() for d in top_docs)
+        if not has_safety:
+            for c in candidates:
+                if "1-800-TECHMART" in c.page_content or "extension 9" in c.page_content.lower():
+                    top_docs.insert(0, c)
+                    break
+
     return top_docs, top_score
 
 

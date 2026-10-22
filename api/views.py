@@ -179,24 +179,20 @@ class SystemStatusView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # 1. API is online (we are inside the view)
         api_status = "Online"
 
-        # 2. Database check
         try:
             AIRequest.objects.exists()
             db_status = "Online"
         except Exception:
             db_status = "Offline"
 
-        # 3. Redis check
         try:
             main.redis_client.ping()
             redis_status = "Online"
         except Exception:
             redis_status = "Offline"
 
-        # 4. Email check (credentials presence)
         email_status = "Online" if (os.getenv("EMAIL_SENDER") and os.getenv("EMAIL_PASSWORD")) else "Configured"
 
         return Response({
@@ -204,17 +200,30 @@ class SystemStatusView(APIView):
             "database": db_status,
             "redis": redis_status,
             "email": email_status,
+            "version": "v2.0-life-safety-cache-fix",
         }, status=status.HTTP_200_OK)
+
+
+class CacheClearView(APIView):
+    """
+    Purges all Redis exact caches, chat history, and Chroma semantic cache,
+    leaving the knowledge base documents 100% intact.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        res = main.clear_all_cache()
+        return Response(res, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        res = main.clear_all_cache()
+        return Response(res, status=status.HTTP_200_OK)
 
 
 class SystemResetView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        import shutil
-        import sqlite3
-        import redis
-        
         results = []
 
         # 1. Django Models
@@ -225,66 +234,17 @@ class SystemResetView(APIView):
         except Exception as e:
             results.append(f"Django DB error: {e}")
 
-        # 2. Redis
-        try:
-            r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-            keys = r.keys('chat_history:*')
-            if keys:
-                r.delete(*keys)
-            exact_keys = r.keys('exact_cache:*')
-            if exact_keys:
-                r.delete(*exact_keys)
-            r.delete('severity_alert_queue')
-            results.append(f"Cleared Redis ({len(keys)} history keys, {len(exact_keys)} exact_cache keys + queue)")
-        except Exception as e:
-            results.append(f"Redis error: {e}")
+        # 2. Redis & Semantic Cache
+        cache_res = main.clear_all_cache()
+        results.extend(cache_res.get("results", []))
 
-        # 3. FTS5
+        # 3. Refresh handles
         try:
-            if os.path.exists('./fts5_index.db'):
-                con = sqlite3.connect('./fts5_index.db')
-                con.execute('DELETE FROM kb_fts')
-                con.commit()
-                con.close()
-                results.append("Cleared FTS5 index")
-        except Exception as e:
-            results.append(f"FTS5 error: {e}")
-
-        # 4. ChromaDB (via API since server is running)
-        try:
-            import chromadb
-            # Clear knowledge base
-            try:
-                client = chromadb.PersistentClient(path='./chroma_kb')
-                cols = client.list_collections()
-                for c in cols:
-                    client.delete_collection(c.name)
-                client.get_or_create_collection('novatek_kb_minilm', metadata={"hnsw:space": "cosine"})
-                results.append("Cleared Chroma knowledge base")
-            except Exception as e:
-                pass
-            
-            # Clear cache
-            try:
-                client2 = chromadb.PersistentClient(path='./chroma_cache')
-                cols2 = client2.list_collections()
-                for c in cols2:
-                    client2.delete_collection(c.name)
-                client2.get_or_create_collection('semantic_cache_minilm', metadata={"hnsw:space": "cosine"})
-                results.append("Cleared Chroma semantic cache")
-            except Exception as e:
-                pass
-                
-            # Rebind in-memory handles to new collections
             main.cache_vectorstore = None
-            main.kb_vectorstore = None
             main.get_cache_vectorstore()
-            main.get_kb_vectorstore()
-            add_documents.kb_vectorstore = None
-            add_documents.get_kb_vectorstore()
-        except Exception as e:
-            results.append(f"ChromaDB error: {e}")
-            
+        except Exception:
+            pass
+
         return Response({"status": "success", "results": results}, status=status.HTTP_200_OK)
 
 

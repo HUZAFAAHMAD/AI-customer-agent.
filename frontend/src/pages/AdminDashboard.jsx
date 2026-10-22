@@ -32,13 +32,29 @@ export default function AdminDashboard() {
       });
   }
 
+  const handleClearCache = async () => {
+    if (!window.confirm("Purge all Redis and Chroma caches? (Knowledge base documents will remain 100% intact).")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/cache/clear/`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Cache Purged Successfully!\n" + (data.results || []).join("\n"));
+        loadDashboardData();
+      } else {
+        alert("Cache clear failed: " + JSON.stringify(data));
+      }
+    } catch (err) {
+      alert("Error calling cache clear API: " + err);
+    }
+  };
+
   const handleReset = async () => {
-    if (!window.confirm("WARNING: This will instantly delete ALL documents in the knowledge base, ALL request logs, chat history, and cache. Your app will be completely empty. Continue?")) return;
+    if (!window.confirm("WARNING: This will reset all request logs, chat history, and cache. Continue?")) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/system/reset/`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        alert("System Reset Complete! Database, Vector Stores, and Redis are empty.");
+        alert("System Reset Complete! Database logs, Redis caches, and queues are empty.");
         loadDashboardData();
       } else {
         alert("Reset failed: " + JSON.stringify(data));
@@ -76,7 +92,10 @@ export default function AdminDashboard() {
           <p className="admin-sub">Overview of AI pipeline system performance, usage, and cost</p>
         </div>
         <div className="header-actions">
-          <button onClick={handleReset} className="btn-danger-small" style={{ marginRight: '10px' }} title="Factory reset all data">
+          <button onClick={handleClearCache} className="btn-secondary" style={{ marginRight: '10px' }} title="Purge Redis and Semantic cache">
+            ⚡ Clear Cache
+          </button>
+          <button onClick={handleReset} className="btn-danger-small" style={{ marginRight: '10px' }} title="Reset logs and cache">
             ⚠️ Factory Reset
           </button>
           <button onClick={loadDashboardData} className="btn-secondary" title="Refresh metrics">

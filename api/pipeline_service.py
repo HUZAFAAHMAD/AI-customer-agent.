@@ -48,6 +48,11 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
         t_sem_0 = time.time()
         cache_result = main.run_step0_cache_check(query, query_embedding=query_embedding)
         cache_latency_ms = round((time.time() - t_sem_0) * 1000, 1)
+
+    if cache_result.get("cache_hit"):
+        # Auto-prune poisoned error responses so bad entries are never served to customers
+        if main.is_poisoned_response(cache_result.get("answer", "")):
+            cache_result = {"cache_hit": False, "answer": None}
     
     if cache_result.get("cache_hit"):
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
@@ -56,6 +61,19 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
         
         in_tokens = calculate_tokens(query)
         out_tokens = calculate_tokens(answer)
+
+        # Life-safety severity & email alert check on cache hits
+        if main.is_emergency_query(query) or main.is_emergency_query(answer):
+            hit_severity = "high"
+            enqueue_alert(query, "high", session_id)
+            EmailAlertLog.objects.create(
+                session_id=session_id,
+                query=query,
+                severity="high",
+                status="sent",
+            )
+        else:
+            hit_severity = "low"
         
         ai_req = AIRequest.objects.create(
             session_id=session_id,
@@ -67,7 +85,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
             total_tokens=in_tokens + out_tokens,
             latency_ms=total_latency_ms,
             cache_hit=True,
-            severity="low",
+            severity=hit_severity,
             complexity="simple",
             source="cache",
             retrieval_count=0,
@@ -86,7 +104,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
             "id": ai_req.id,
             "session_id": session_id,
             "answer": answer,
-            "severity": "low",
+            "severity": hit_severity,
             "complexity": "simple",
             "source": "cache",
             "llm_calls": 0,
@@ -123,8 +141,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
         retrieval_latency_ms = 0.0
 
     # Deterministic enterprise life-safety override
-    q_low = query.lower()
-    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency", "gdpr", "fraud", "unauthorized"]):
+    if main.is_emergency_query(query):
         analysis.severity = "high"
 
     # High severity check & durable alert queuing
@@ -136,6 +153,14 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
             severity="high",
             status="sent",
         )
+
+    if not candidates:
+        if analysis.severity == "high":
+            try:
+                fts_retriever = SQLiteFTS5Retriever(db_path=main.FTS5_DB_PATH, k=3)
+                candidates = fts_retriever.invoke("CRITICAL PRODUCT SAFETY PROTOCOL burning smell smoke sparks battery swelling emergency dispatch 1-800-TECHMART Extension 9")
+            except Exception:
+                candidates = []
 
     if not candidates:
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
@@ -190,7 +215,7 @@ def run_pipeline_with_metrics(query: str, session_id: str) -> Dict[str, Any]:
     top_docs, top_score = main.run_step3_rerank(analysis.standalone_query, candidates, top_k=6)
     rerank_latency_ms = round((time.time() - t3) * 1000, 1)
 
-    if top_score < main.RERANK_SCORE_THRESHOLD:
+    if top_score < main.RERANK_SCORE_THRESHOLD and analysis.severity != "high":
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
         fallback_msg = "I couldn't find sufficiently relevant information for your request. Please contact support."
         ai_req = AIRequest.objects.create(
@@ -355,12 +380,30 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
         cache_latency_ms = round((time.time() - t_sem_0) * 1000, 1)
 
     if cache_result.get("cache_hit"):
+        # Auto-prune poisoned error responses so bad entries are never served to customers
+        if main.is_poisoned_response(cache_result.get("answer", "")):
+            cache_result = {"cache_hit": False, "answer": None}
+
+    if cache_result.get("cache_hit"):
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
         answer = cache_result["answer"]
         main.save_to_history(session_id, query, answer)
 
         in_tokens = calculate_tokens(query)
         out_tokens = calculate_tokens(answer)
+
+        # Life-safety severity & email alert check on cache hits
+        if main.is_emergency_query(query) or main.is_emergency_query(answer):
+            hit_severity = "high"
+            enqueue_alert(query, "high", session_id)
+            EmailAlertLog.objects.create(
+                session_id=session_id,
+                query=query,
+                severity="high",
+                status="sent",
+            )
+        else:
+            hit_severity = "low"
 
         ai_req = AIRequest.objects.create(
             session_id=session_id,
@@ -372,7 +415,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
             total_tokens=in_tokens + out_tokens,
             latency_ms=total_latency_ms,
             cache_hit=True,
-            severity="low",
+            severity=hit_severity,
             complexity="simple",
             source="cache",
             retrieval_count=0,
@@ -395,7 +438,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
             "id": ai_req.id,
             "session_id": session_id,
             "answer": answer,
-            "severity": "low",
+            "severity": hit_severity,
             "complexity": "simple",
             "source": "cache",
             "llm_calls": 0,
@@ -434,8 +477,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
         retrieval_latency_ms = 0.0
 
     # Deterministic enterprise life-safety override
-    q_low = query.lower()
-    if any(w in q_low for w in ["burn", "fire", "firing", "smoke", "spark", "shock", "swollen", "explod", "melt", "leak", "flame", "hazard", "emergency", "gdpr", "fraud", "unauthorized"]):
+    if main.is_emergency_query(query):
         analysis.severity = "high"
 
     if analysis.severity == "high":
@@ -446,6 +488,14 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
             severity="high",
             status="sent",
         )
+
+    if not candidates:
+        if analysis.severity == "high":
+            try:
+                fts_retriever = SQLiteFTS5Retriever(db_path=main.FTS5_DB_PATH, k=3)
+                candidates = fts_retriever.invoke("CRITICAL PRODUCT SAFETY PROTOCOL burning smell smoke sparks battery swelling emergency dispatch 1-800-TECHMART Extension 9")
+            except Exception:
+                candidates = []
 
     if not candidates:
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
@@ -504,7 +554,7 @@ def stream_pipeline_with_metrics(query: str, session_id: str):
     top_docs, top_score = main.run_step3_rerank(analysis.standalone_query, candidates, top_k=6)
     rerank_latency_ms = round((time.time() - t3) * 1000, 1)
 
-    if top_score < main.RERANK_SCORE_THRESHOLD:
+    if top_score < main.RERANK_SCORE_THRESHOLD and analysis.severity != "high":
         total_latency_ms = round((time.time() - total_start_time) * 1000, 1)
         fallback_msg = "I couldn't find sufficiently relevant information for your request. Please contact support."
         ai_req = AIRequest.objects.create(

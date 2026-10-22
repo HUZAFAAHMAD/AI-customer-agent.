@@ -10,6 +10,7 @@ from .views import (
     AIModelConfigViewSet,
     SystemStatusView,
     SystemResetView,
+    CacheClearView,
     DocumentManagementView,
 )
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path("stats/", AdminStatsView.as_view(), name="admin-stats"),
     path("system/", SystemStatusView.as_view(), name="system-status"),
     path("system/reset/", SystemResetView.as_view(), name="system-reset"),
+    path("cache/clear/", CacheClearView.as_view(), name="cache-clear"),
     path("documents/", DocumentManagementView.as_view(), name="documents"),
 
     # ViewSets (router generates /requests/, /requests/<id>/, /models/, etc.)

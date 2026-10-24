@@ -342,3 +342,22 @@ class DocumentManagementView(APIView):
         except Exception as e:
             return Response({"error": f"Failed to delete document: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+from email_alert import send_severity_alert_email
+
+class TestEmailAlertView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        res = send_severity_alert_email("Live safety emergency test from Railway diagnostics", "high", "live-diagnostic")
+        return Response({
+            "status": "success" if "successfully" in res else "failed",
+            "message": res,
+            "has_resend_key": bool(os.getenv("RESEND_API_KEY")),
+            "sender": os.getenv("EMAIL_SENDER", ""),
+            "receiver": os.getenv("EMAIL_RECEIVER", ""),
+            "smtp_host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+            "smtp_port": os.getenv("SMTP_PORT", "587"),
+        }, status=status.HTTP_200_OK)
+
+

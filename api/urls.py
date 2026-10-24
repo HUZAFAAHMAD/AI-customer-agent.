@@ -12,6 +12,7 @@ from .views import (
     SystemResetView,
     CacheClearView,
     DocumentManagementView,
+    TestEmailAlertView,
 )
 
 router = DefaultRouter()
@@ -31,6 +32,7 @@ urlpatterns = [
     path("system/reset/", SystemResetView.as_view(), name="system-reset"),
     path("cache/clear/", CacheClearView.as_view(), name="cache-clear"),
     path("documents/", DocumentManagementView.as_view(), name="documents"),
+    path("test-email/", TestEmailAlertView.as_view(), name="test-email"),
 
     # ViewSets (router generates /requests/, /requests/<id>/, /models/, etc.)
     path("", include(router.urls)),

@@ -94,9 +94,18 @@ def send_severity_alert_email(
         if "successfully" in res:
             return res
         print(f"[email-alert] HTTPS attempt did not succeed: {res}")
-        # If running in cloud container and Resend returned an explicit error, don't mask it with SMTP Errno 101
         if not (sender and password):
             return res
+        # If both are configured, try SMTP fallback
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = sender
+        msg["To"] = receiver
+        msg.set_content(content)
+        try:
+            return _send_via_smtp(sender, password, receiver, host, port, msg)
+        except Exception as smtp_err:
+            return f"{res}. SMTP fallback also failed: {smtp_err}"
 
     # 2. Fallback: Use standard SMTP (for local development or unblocked networks)
     if not (sender and password):

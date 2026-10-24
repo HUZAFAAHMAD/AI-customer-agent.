@@ -14,7 +14,7 @@ import json
 import re
 import redis
 import os
-from config import GOOGLE_API_KEY
+from config import GOOGLE_API_KEY, REDIS_URL
 from fts5_retriever import SQLiteFTS5Retriever
 from alert_queue import enqueue_alert, start_alert_worker
 
@@ -39,7 +39,6 @@ os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 # similarity_search_with_score / add_documents / as_retriever interface
 # this file already relies on, so this is a safe drop-in swap.
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 FTS5_DB_PATH = "./fts5_index.db"  # must match the path used in add_document.py
 
 RETRIEVAL_K = 10  # calibrated recall net for 20-page corpus
@@ -140,18 +139,25 @@ def _history_key(session_id: str) -> str:
 
 
 def get_history(session_id: str) -> list:
-    raw_items = redis_client.lrange(_history_key(session_id), 0, -1)
-    return [json.loads(item) for item in raw_items]
+    try:
+        raw_items = redis_client.lrange(_history_key(session_id), 0, -1)
+        return [json.loads(item) for item in raw_items]
+    except Exception as e:
+        print(f"[Redis history warning] get_history bypassed due to error: {e}")
+        return []
 
 
 def save_to_history(session_id: str, query: str, answer: str) -> None:
-    key = _history_key(session_id)
-    pipe = redis_client.pipeline()
-    pipe.rpush(key, json.dumps({"role": "user", "content": query}))
-    pipe.rpush(key, json.dumps({"role": "assistant", "content": answer}))
-    pipe.ltrim(key, -HISTORY_MAX_MESSAGES, -1)  # sliding window, oldest turns fall off
-    pipe.expire(key, HISTORY_TTL_SECONDS)
-    pipe.execute()
+    try:
+        key = _history_key(session_id)
+        pipe = redis_client.pipeline()
+        pipe.rpush(key, json.dumps({"role": "user", "content": query}))
+        pipe.rpush(key, json.dumps({"role": "assistant", "content": answer}))
+        pipe.ltrim(key, -HISTORY_MAX_MESSAGES, -1)  # sliding window, oldest turns fall off
+        pipe.expire(key, HISTORY_TTL_SECONDS)
+        pipe.execute()
+    except Exception as e:
+        print(f"[Redis history warning] save_to_history bypassed due to error: {e}")
 
 
 # ── Cache Poison Guard & Life-Safety Detection ─────────────────────

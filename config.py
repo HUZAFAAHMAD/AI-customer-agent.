@@ -7,10 +7,29 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-# Redis configuration
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/0")
+# Redis configuration (supports REDIS_URL, REDIS_PRIVATE_URL, or Railway REDISHOST/REDISPASSWORD)
+import urllib.parse
+
+
+def get_redis_url() -> str:
+    url = os.getenv("REDIS_URL") or os.getenv("REDIS_PRIVATE_URL") or os.getenv("REDIS_PUBLIC_URL")
+    if url and url.strip():
+        return url.strip()
+
+    host = os.getenv("REDISHOST") or os.getenv("REDIS_HOST", "localhost")
+    port = os.getenv("REDISPORT") or os.getenv("REDIS_PORT", "6379")
+    user = os.getenv("REDISUSER") or os.getenv("REDIS_USER", "default")
+    password = os.getenv("REDISPASSWORD") or os.getenv("REDIS_PASSWORD", "")
+
+    if password:
+        encoded_pass = urllib.parse.quote_plus(password.strip())
+        return f"redis://{user}:{encoded_pass}@{host}:{port}/0"
+    return f"redis://{host}:{port}/0"
+
+
+REDIS_URL = get_redis_url()
+REDIS_HOST = os.getenv("REDISHOST") or os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDISPORT") or os.getenv("REDIS_PORT", 6379))
 
 # SMTP configuration
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")

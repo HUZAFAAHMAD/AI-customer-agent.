@@ -37,8 +37,8 @@ import time
 import redis
 
 from email_alert import send_severity_alert_email
+from config import REDIS_URL
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 ALERT_QUEUE_KEY = "severity_alert_queue"
 
 redis_client = redis.Redis.from_url(
@@ -85,12 +85,12 @@ def _worker_loop() -> None:
                 session_id=job["session_id"],
             )
             print(f"[alert-worker] {result}")
-        except (redis.ConnectionError, redis.TimeoutError) as conn_err:
+        except (redis.ConnectionError, redis.TimeoutError, redis.AuthenticationError) as conn_err:
             # Reconnect resilience: network blips or Redis restarts should never kill the worker
             print(
-                f"[alert-worker] Redis connection dropped, retrying in 3s: {conn_err}"
+                f"[alert-worker] Redis connection or auth error, retrying in 5s: {conn_err}"
             )
-            time.sleep(3)
+            time.sleep(5)
         except Exception as exc:
             # a bad job should never kill the worker loop - log and move on
             print(f"[alert-worker] failed to process alert job: {exc}")

@@ -294,7 +294,13 @@ start_alert_worker()
 # =================================================================
 
 
-CACHE_DISTANCE_THRESHOLD = 0.065  # calibrated for SEMANTIC_SIMILARITY: exact=0.000, rephrased=0.042-0.045, different>=0.160
+# Semantic cache distance threshold (Cosine distance in Chroma with gemini-embedding-001):
+# - Exact match: distance = 0.0000 (handled in <1ms by Redis)
+# - Natural rephrasing: distance = 0.040 - 0.055 (HIT)
+# - Style / keyword change: distance = 0.060 - 0.080 (HIT)
+# - Partially related / different question: distance >= 0.185 (REJECTED / Safe)
+# - Unrelated question: distance >= 0.250 (REJECTED / Safe)
+CACHE_DISTANCE_THRESHOLD = float(os.getenv("CACHE_DISTANCE_THRESHOLD", "0.085"))
 
 
 def embed_query_once(query: str) -> Optional[List[float]]:

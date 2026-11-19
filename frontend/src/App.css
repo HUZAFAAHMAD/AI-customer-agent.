@@ -763,6 +763,14 @@ body {
   overflow-x: auto;
 }
 
+.documents-table-desktop {
+  display: block;
+}
+
+.documents-cards-mobile {
+  display: none;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -1659,6 +1667,82 @@ body {
 
   .login-card {
     padding: 24px 18px;
+  }
+
+  /* Mobile Document Cards (No Horizontal Scrolling, Immediate Trash Button) */
+  .documents-table-desktop {
+    display: none;
+  }
+
+  .documents-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 6px 0;
+  }
+
+  .doc-mobile-card {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .doc-mobile-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .doc-mobile-title-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .doc-mobile-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .doc-mobile-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #0f172a;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+
+  .doc-mobile-delete-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+
+  .doc-mobile-card-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px dashed #e2e8f0;
+  }
+
+  .reindex-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+    white-space: normal;
+    text-align: center;
   }
 }
 

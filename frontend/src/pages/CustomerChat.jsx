@@ -38,6 +38,19 @@ export default function CustomerChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Responsive placeholder detection for mobile devices
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   async function sendMessage(textToSend) {
     const text = textToSend || query;
     if (!text.trim() || loading) return;
@@ -324,7 +337,7 @@ export default function CustomerChat() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Type your question (e.g. Where is my order? Return policy?)..."
+          placeholder={isMobile ? "Ask your question..." : "Type your question (e.g. Where is my order? Return policy?)..."}
           disabled={loading}
           className="chat-input"
         />

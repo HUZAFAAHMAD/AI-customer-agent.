@@ -251,53 +251,90 @@ export default function AdminDocuments() {
         {loading ? (
           <p style={{ padding: "20px" }}>Loading knowledge base index...</p>
         ) : (
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Source Document</th>
-                  <th>Indexed Chunks</th>
-                  <th>Storage Backends</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.length === 0 ? (
+          <>
+            {/* Desktop Table View (preserved 100% for laptop & desktop) */}
+            <div className="table-responsive documents-table-desktop">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="4" style={{ textAlign: "center", padding: "28px" }}>
-                      No documents currently indexed in ChromaDB or FTS5.
-                      <br />
-                      Upload a PDF below or click <strong>"Quick Index: techmart_support_guide.pdf"</strong>!
-                    </td>
+                    <th>Source Document</th>
+                    <th>Indexed Chunks</th>
+                    <th>Storage Backends</th>
+                    <th>Action</th>
                   </tr>
-                ) : (
-                  documents.map((doc, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <strong>📄 {doc.source}</strong>
-                      </td>
-                      <td>
-                        <span className="badge badge-model">{doc.chunks} chunks</span>
-                      </td>
-                      <td>
-                        <span className="badge badge-cache">ChromaDB (Cosine)</span>{" "}
-                        <span className="badge badge-neutral">SQLite FTS5</span>
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => handleDeleteDocument(doc.source)}
-                          className="btn-danger-small"
-                          title="Delete from both Chroma and FTS5"
-                        >
-                          🗑️ Delete
-                        </button>
+                </thead>
+                <tbody>
+                  {documents.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: "center", padding: "28px" }}>
+                        No documents currently indexed in ChromaDB or FTS5.
+                        <br />
+                        Upload a PDF below or click <strong>"Quick Index: techmart_support_guide.pdf"</strong>!
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    documents.map((doc, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <strong>📄 {doc.source}</strong>
+                        </td>
+                        <td>
+                          <span className="badge badge-model">{doc.chunks} chunks</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-cache">ChromaDB (Cosine)</span>{" "}
+                          <span className="badge badge-neutral">SQLite FTS5</span>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => handleDeleteDocument(doc.source)}
+                            className="btn-danger-small"
+                            title="Delete from both Chroma and FTS5"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View: Clean Document Cards (Immediate Delete Button, Zero Horizontal Scrolling!) */}
+            <div className="documents-cards-mobile">
+              {documents.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px", color: "#64748b" }}>
+                  No documents currently indexed in ChromaDB or FTS5.
+                  <br />
+                  Upload a PDF below or click <strong>"Quick Index"</strong>!
+                </div>
+              ) : (
+                documents.map((doc, idx) => (
+                  <div key={idx} className="doc-mobile-card">
+                    <div className="doc-mobile-card-top">
+                      <div className="doc-mobile-title-wrap">
+                        <span className="doc-mobile-icon">📄</span>
+                        <strong className="doc-mobile-name">{doc.source}</strong>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.source)}
+                        className="btn-danger-small doc-mobile-delete-btn"
+                        title="Delete from both Chroma and FTS5"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                    <div className="doc-mobile-card-bottom">
+                      <span className="badge badge-model">{doc.chunks} chunks</span>
+                      <span className="badge badge-cache">ChromaDB (Cosine)</span>
+                      <span className="badge badge-neutral">SQLite FTS5</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
 

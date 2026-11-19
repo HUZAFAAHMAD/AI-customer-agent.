@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "../apiConfig";
 
 export default function CustomerChat() {
+  const messagesEndRef = useRef(null);
   // Phase 1 Topic 3: useState for managing state
   const [sessionId, setSessionId] = useState(() => {
     const saved = localStorage.getItem("chat_session_id");
@@ -31,6 +32,11 @@ export default function CustomerChat() {
     "What are the return fees for opened items?",
     "I bought parcel 1 year ago still not arrived, this is fraud!",
   ];
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function sendMessage(textToSend) {
     const text = textToSend || query;
@@ -309,6 +315,7 @@ export default function CustomerChat() {
             <p>⚠️ {error}</p>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Chat Input Form (Phase 1 Topic 5 & 6) */}

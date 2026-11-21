@@ -14,7 +14,7 @@ import json
 import re
 import redis
 import os
-from config import GOOGLE_API_KEY, REDIS_URL
+from config import GOOGLE_API_KEY, GROQ_API_KEY, GROQ_MODEL, REDIS_URL
 from fts5_retriever import SQLiteFTS5Retriever
 from alert_queue import enqueue_alert, start_alert_worker
 
@@ -48,9 +48,19 @@ RERANK_MODEL = "ms-marco-TinyBERT-L-2-v2"
 RERANK_SCORE_THRESHOLD = 0.00005  # calibrated: allows typo/colloquial customer queries while gating out-of-domain noise
 
 # ── LLM instances ─────────────────────────────────────────────────
-DEFAULT_MODEL = os.getenv("GOOGLE_MODEL_NAME", "gemini-3.5-flash-lite")
-llm = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0, timeout=10, max_retries=1, client_args={"http_options": {"timeout": 10000}})
-llm_generation = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0.2, timeout=15, max_retries=1, client_args={"http_options": {"timeout": 15000}})
+GROQ_API_KEY_VAL = os.getenv("GROQ_API_KEY") or GROQ_API_KEY
+USE_GROQ = bool(GROQ_API_KEY_VAL and GROQ_API_KEY_VAL.strip())
+
+if USE_GROQ:
+    os.environ["GROQ_API_KEY"] = GROQ_API_KEY_VAL
+    from langchain_groq import ChatGroq
+    ACTIVE_GROQ_MODEL = os.getenv("GROQ_MODEL") or GROQ_MODEL or "openai/gpt-oss-120b"
+    llm = ChatGroq(model=ACTIVE_GROQ_MODEL, temperature=0, timeout=10, max_retries=1)
+    llm_generation = ChatGroq(model=ACTIVE_GROQ_MODEL, temperature=0.2, timeout=15, max_retries=1)
+else:
+    DEFAULT_MODEL = os.getenv("GOOGLE_MODEL_NAME", "gemini-3.5-flash-lite")
+    llm = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0, timeout=10, max_retries=1, client_args={"http_options": {"timeout": 10000}})
+    llm_generation = ChatGoogleGenerativeAI(model=DEFAULT_MODEL, temperature=0.2, timeout=15, max_retries=1, client_args={"http_options": {"timeout": 15000}})
 
 # ── Embeddings ────────────────────────────────────────────────────
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
@@ -389,7 +399,10 @@ class BatchAnalysis(BaseModel):
     )
 
 
-batch_llm = llm.with_structured_output(BatchAnalysis)
+if USE_GROQ:
+    batch_llm = llm.with_structured_output(BatchAnalysis, method="json_mode")
+else:
+    batch_llm = llm.with_structured_output(BatchAnalysis)
 
 batch_prompt = ChatPromptTemplate.from_messages(
     [
@@ -397,23 +410,23 @@ batch_prompt = ChatPromptTemplate.from_messages(
             "system",
             """You are an intelligent query analyzer for a RAG customer support system.
 
-Given a customer query and optional conversation history, return ALL of the following in one response:
+Given a customer query and optional conversation history, return a JSON object with EXACTLY these lowercase keys:
 
-1. SEVERITY — classify the customer's issue:
+- severity: classify the customer's issue ("low", "medium", or "high")
    - low: normal question, general inquiry
    - medium: billing issue, important problem needing attention
    - high: urgent, harmful, account compromised, data loss, legal threat
 
-2. STANDALONE QUERY — rewrite the query so it makes sense WITHOUT the history:
-   - If no history exists OR query is already standalone → return it UNCHANGED
-   - If query uses "that", "it", "the same", "above" → replace with what it refers to
+- standalone_query: rewrite the query so it makes sense WITHOUT the history (string)
+   - If no history exists OR query is already standalone -> return it UNCHANGED
+   - If query uses "that", "it", "the same", "above" -> replace with what it refers to
    - Return ONLY the rewritten question
 
-3. COMPLEXITY — classify the query:
+- complexity: classify the query ("simple" or "complex")
    - simple: single factual question, one clear answer expected
    - complex: multi-part, ambiguous, requires reasoning across multiple topics
 
-4. EXPANDED QUERIES — generate search queries for retrieval:
+- expanded_queries: search queries for retrieval (list of strings)
    - If simple: return exactly 1 query (the standalone query itself)
    - If complex: return exactly 3 queries covering different angles/phrasings
    - Always include the standalone query as one of them
